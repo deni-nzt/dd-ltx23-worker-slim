@@ -13,14 +13,16 @@
 #   - ships /opt/boot-baked.sh (the client's dockerStartCmd runs exactly that);
 #   - fetches server.py from the signed SERVER_URL bundle at start (always current);
 #   - serves on :8188; WORKER_MODE picks a2v/i2v as before.
-# runpod/base, NOT nvidia/cuda:*-runtime (canary 2026-08-31, pod lhxti2xho5w49n, $0.10):
-# triton JIT-compiles kernels at first gen and needs the compiler toolchain the runtime
-# image lacks ("include_dirs/libraries/ccflags" death in triton.runtime.build). This is
-# the exact base the self-bootstrap mode ran on for weeks — zero unknown-unknowns.
-FROM runpod/base:1.1.0-cuda1281-ubuntu2204
+# Slim CUDA runtime base + ONLY triton's JIT needs (canary #1 2026-08-31, pod
+# lhxti2xho5w49n, $0.10: triton.runtime.build dies without a C compiler —
+# "include_dirs/libraries/ccflags"). runpod/base fixes that too but drags ~13GB of
+# unrelated tooling (32.4GB uncompressed — right back toward the wall); build-essential
+# + python3-dev is the ~400MB surgical version. If a later canary wants CUDA headers,
+# the next rung is nvidia/cuda:12.8.1-devel (+4GB), never runpod/base.
+FROM nvidia/cuda:12.8.1-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive PATH=/root/.local/bin:$PATH
-RUN apt-get update -qq && apt-get install -y -qq git ffmpeg jq curl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -qq && apt-get install -y -qq git ffmpeg jq curl ca-certificates openssh-server build-essential python3-dev && rm -rf /var/lib/apt/lists/*
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # LTX-2 at the SAME pin boot.sh has always used — the locked recipe's ground truth.
